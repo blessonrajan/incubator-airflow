@@ -17,15 +17,21 @@
 # specific language governing permissions and limitations
 # under the License.
 import os
-import shutil
+import six
 import sys
 import tempfile
-import unittest
 from mock import patch, mock
 
 from airflow import configuration as conf
 from airflow.configuration import mkdir_p
 from airflow.exceptions import AirflowConfigException
+
+
+if six.PY2:
+    # Need `assertWarns` back-ported from unittest2
+    import unittest2 as unittest
+else:
+    import unittest
 
 SETTINGS_FILE_VALID = """
 LOGGING_CONFIG = {
@@ -221,6 +227,16 @@ class TestLoggingSettings(unittest.TestCase):
             mock_info.assert_called_with(
                 'Unable to load custom logging, using default config instead'
             )
+
+    def test_1_9_config(self):
+        from airflow.logging_config import configure_logging
+        conf.set('core', 'task_log_reader', 'file.task')
+        try:
+            with self.assertWarnsRegex(DeprecationWarning, r'file.task'):
+                configure_logging()
+                self.assertEqual(conf.get('core', 'task_log_reader'), 'task')
+        finally:
+            conf.remove_option('core', 'task_log_reader', remove_default=False)
 
 
 if __name__ == '__main__':
